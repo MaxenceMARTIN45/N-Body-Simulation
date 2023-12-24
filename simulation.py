@@ -83,6 +83,9 @@ def run_simulation():
     offset_x, offset_y = 0, 0
     mouse_button_pressed = False
 
+    # Facteur d'échelle initial
+    current_scale_factor = SCALE_FACTOR_LINEAR
+
     while True:
 
         # Gestion des évènements
@@ -90,9 +93,14 @@ def run_simulation():
             if event.type == pygame.QUIT:
                 pygame.quit()
                 sys.exit()
-            elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:  # Vérifier le clic gauche
-                initial_mouse_x, initial_mouse_y = pygame.mouse.get_pos()
-                mouse_button_pressed = True
+            elif event.type == pygame.MOUSEBUTTONDOWN:
+                if event.button == 1:  # Vérifier le clic gauche
+                    initial_mouse_x, initial_mouse_y = pygame.mouse.get_pos()
+                    mouse_button_pressed = True
+                elif event.button == 4:  # Molette vers le haut
+                    current_scale_factor *= 1.1  # Augmenter le facteur d'échelle
+                elif event.button == 5:  # Molette vers le bas
+                    current_scale_factor /= 1.1  # Diminuer le facteur d'échelle
             elif event.type == pygame.MOUSEBUTTONUP and event.button == 1:
                 mouse_button_pressed = False
 
@@ -111,7 +119,7 @@ def run_simulation():
         # Affichage des objets
         screen.fill((0, 0, 0))
         for obj in list_of_celestial_objects:
-            pygame.draw.circle(screen, obj.color, translate_coordinates(obj, width, height, offset_x=offset_x, offset_y=offset_y), obj.radius)
+            pygame.draw.circle(screen, obj.color, translate_coordinates(obj, width, height, scale_factor=current_scale_factor, offset_x=offset_x, offset_y=offset_y), obj.radius)
 
         pygame.display.flip()
         clock.tick(30)  # Limiter la vitesse d'affichage
