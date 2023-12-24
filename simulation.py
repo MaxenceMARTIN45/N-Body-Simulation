@@ -5,8 +5,7 @@ import math
 # Constantes
 G = 6.674 * (10 ** -11)  # Constante gravitationnelle
 SCALE_FACTOR_LINEAR = 100e8  # Facteur d'échelle pour la simulation
-SCALE_FACTOR_NONLINEAR = 20
-SCALE_FACTOR_LOG = 20
+SCALE_FACTOR_MOUSE = 1
 
 # Classe pour représenter un objet céleste
 class CelestialObject:
@@ -45,52 +44,10 @@ def update_velocities(objects, time_step):
                 objects[i].vx += acceleration_x * time_step
                 objects[i].vy += acceleration_y * time_step
 
-def cartesian_to_polar(x, y):
-    """Convert Cartesian coordinates to polar coordinates."""
-    radius = math.sqrt(x**2 + y**2)
-    angle = math.atan2(y, x)
-    return radius, angle
-
-def polar_to_cartesian(radius, angle):
-    """Convert polar coordinates to Cartesian coordinates."""
-    x = radius * math.cos(angle)
-    y = radius * math.sin(angle)
-    return x, y
-
-def translate_coordinates(obj, width, height, scale_factor = SCALE_FACTOR_LINEAR):
+def translate_coordinates(obj, width, height, scale_factor=SCALE_FACTOR_LINEAR, offset_x=0, offset_y=0):
     """Translate object coordinates to the center of the screen."""
-    translated_x = int(obj.x / scale_factor) + width // 2
-    translated_y = int(obj.y / scale_factor) + height // 2
-    return translated_x, translated_y
-
-def translate_coordinates_log(obj, width, height, scale_factor = SCALE_FACTOR_LOG):
-    """Translate object coordinates to the center of the screen."""
-    radius,angle = cartesian_to_polar(obj.x,obj.y)
-    radius = math.log10(radius + 1)
-    x,y = polar_to_cartesian(radius,angle)
-    translated_x = int(x * scale_factor) + width // 2
-    translated_y = int(y * scale_factor) + height // 2
-    return translated_x, translated_y
-
-def nonlinear_translate_coordinates(obj, width, height, x_scale_factor=SCALE_FACTOR_NONLINEAR, y_scale_factor=SCALE_FACTOR_NONLINEAR):
-    """Translate object coordinates to the center of the screen with nonlinear scaling."""
-    if obj.x < 0:
-        translated_x = int(-math.log10(abs(obj.x) + 1) * x_scale_factor) + width // 2
-    else:
-        translated_x = int(math.log10(abs(obj.x) + 1) * x_scale_factor) + width // 2
-    if obj.y < 0:
-        translated_y = int(-math.log10(abs(obj.y) + 1) * y_scale_factor) + height // 2
-    else:
-        translated_y = int(math.log10(abs(obj.y) + 1) * y_scale_factor) + height // 2
-    return translated_x, translated_y
-
-def translate_coordinates_nonlinear(obj, width, height, factor=1.0):
-    """Translate object coordinates to the center of the screen with nonlinear scaling."""
-    distance = math.sqrt(obj.x ** 2 + obj.y ** 2)
-    scaled_distance = math.log(distance + 1) * factor
-    angle = math.atan2(obj.y, obj.x)
-    translated_x = int(scaled_distance * math.cos(angle)) + width // 2
-    translated_y = int(scaled_distance * math.sin(angle)) + height // 2
+    translated_x = int(obj.x / scale_factor) + width // 2 - offset_x * SCALE_FACTOR_MOUSE
+    translated_y = int(obj.y / scale_factor) + height // 2 - offset_y * SCALE_FACTOR_MOUSE
     return translated_x, translated_y
 
 # Fonction principale pour exécuter la simulation
@@ -111,8 +68,7 @@ def run_simulation():
     list_of_celestial_objects = [sun, mercury, venus, earth, mars, jupiter, saturn, uranus, neptune]
 
     # Paramètres de la simulation
-    time_step = 100*86400  # en secondes (86 400 s = 1 j)
-    time_scale = 24  # échelle de temps (une heure dans la simulation = time_scale secondes)
+    time_step = 100 * 86400  # en secondes (86 400 s = 1 j)
 
     # Initialisation de Pygame
     pygame.init()
@@ -122,21 +78,40 @@ def run_simulation():
 
     clock = pygame.time.Clock()
 
+    # Position initiale de la souris
+    initial_mouse_x, initial_mouse_y = pygame.mouse.get_pos()
+    offset_x, offset_y = 0, 0
+    mouse_button_pressed = False
+
     while True:
+
+        # Gestion des évènements
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
                 sys.exit()
+            elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:  # Vérifier le clic gauche
+                initial_mouse_x, initial_mouse_y = pygame.mouse.get_pos()
+                mouse_button_pressed = True
+            elif event.type == pygame.MOUSEBUTTONUP and event.button == 1:
+                mouse_button_pressed = False
 
         # Mise à jour des positions et vitesses des objets
         update_velocities(list_of_celestial_objects, time_step)
         for obj in list_of_celestial_objects:
             obj.update_position(time_step)
 
+        # Mise à jour du déplacement en fonction du mouvement de la souris (si le bouton est enfoncé)
+        if mouse_button_pressed:
+            current_mouse_x, current_mouse_y = pygame.mouse.get_pos()
+            offset_x -= current_mouse_x - initial_mouse_x
+            offset_y -= current_mouse_y - initial_mouse_y
+            initial_mouse_x, initial_mouse_y = current_mouse_x, current_mouse_y
+        
         # Affichage des objets
         screen.fill((0, 0, 0))
-        for object in list_of_celestial_objects:
-            pygame.draw.circle(screen, object.color, translate_coordinates_log(object, width, height), object.radius)
+        for obj in list_of_celestial_objects:
+            pygame.draw.circle(screen, obj.color, translate_coordinates(obj, width, height, offset_x=offset_x, offset_y=offset_y), obj.radius)
 
         pygame.display.flip()
         clock.tick(30)  # Limiter la vitesse d'affichage
