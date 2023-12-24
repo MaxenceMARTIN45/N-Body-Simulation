@@ -1,13 +1,9 @@
+# Import libraries
 import pygame
 import sys
 import math
 
-# Constantes
-G = 6.674 * (10 ** -11)  # Constante gravitationnelle
-SCALE_FACTOR_LINEAR = 100e8  # Facteur d'échelle pour la simulation
-SCALE_FACTOR_MOUSE = 1
-
-# Classe pour représenter un objet céleste
+# Class to represent a celestial object
 class CelestialObject:
     def __init__(self, mass, x, y, vx, vy, color, radius):
         self.mass = mass
@@ -22,107 +18,150 @@ class CelestialObject:
         self.x += self.vx * time_step
         self.y += self.vy * time_step
 
-# Fonction pour calculer la force gravitationnelle entre deux objets
-def calculate_gravitational_force(obj1, obj2):
-    dx = obj2.x - obj1.x
-    dy = obj2.y - obj1.y
-    distance = math.sqrt(dx**2 + dy**2)
-    force_magnitude = (G * obj1.mass * obj2.mass) / distance**2
-    angle = math.atan2(dy, dx)
-    force_x = force_magnitude * math.cos(angle)
-    force_y = force_magnitude * math.sin(angle)
-    return force_x, force_y
+# Class to represent the gravitational system
+class GravitationalSystem:
+    def __init__(self, system):
+        self.objects = system
+        self.G = 6.674 * (10 ** -11)
 
-# Fonction pour mettre à jour les vitesses des objets en fonction des forces gravitationnelles
-def update_velocities(objects, time_step):
-    for i in range(len(objects)):
-        for j in range(len(objects)):
-            if i != j:
-                force_x, force_y = calculate_gravitational_force(objects[i], objects[j])
-                acceleration_x = force_x / objects[i].mass
-                acceleration_y = force_y / objects[i].mass
-                objects[i].vx += acceleration_x * time_step
-                objects[i].vy += acceleration_y * time_step
+    def calculate_gravitational_force(self, obj1, obj2):
+        dx = obj2.x - obj1.x
+        dy = obj2.y - obj1.y
+        distance = math.sqrt(dx**2 + dy**2)
+        force_magnitude = (self.G * obj1.mass * obj2.mass) / distance**2
+        angle = math.atan2(dy, dx)
+        force_x = force_magnitude * math.cos(angle)
+        force_y = force_magnitude * math.sin(angle)
+        return force_x, force_y
 
-def translate_coordinates(obj, width, height, scale_factor=SCALE_FACTOR_LINEAR, offset_x=0, offset_y=0):
-    """Translate object coordinates to the center of the screen."""
-    translated_x = int(obj.x / scale_factor) + width // 2 - offset_x * SCALE_FACTOR_MOUSE
-    translated_y = int(obj.y / scale_factor) + height // 2 - offset_y * SCALE_FACTOR_MOUSE
-    return translated_x, translated_y
+    def update_velocities(self, time_step):
+        for i in range(len(self.objects)):
+            for j in range(len(self.objects)):
+                if i != j:
+                    force_x, force_y = self.calculate_gravitational_force(self.objects[i], self.objects[j])
+                    acceleration_x = force_x / self.objects[i].mass
+                    acceleration_y = force_y / self.objects[i].mass
+                    self.objects[i].vx += acceleration_x * time_step
+                    self.objects[i].vy += acceleration_y * time_step
 
-# Fonction principale pour exécuter la simulation
-def run_simulation():
+# Class to manage events
+class EventManager:
+    def __init__(self, scale_factor):
+        self.offset_x, self.offset_y = 0, 0
+        self.current_scale_factor = scale_factor
+        self.mouse_button_pressed = False
+        self.initial_mouse_x, self.initial_mouse_y = 0, 0
 
-    # Initialisation des objets
-    sun = CelestialObject(1.989e30, 0, 0, 0, 0, (255, 255, 0), 20)
-    mercury = CelestialObject(3.285e23, 5.791e10, 0, 0, 47000, (200, 200, 200), 3)
-    venus = CelestialObject(4.867e24, 1.082e11, 0, 0, 35000, (255, 165, 0), 4)
-    earth = CelestialObject(5.972e24, 1.496e11, 0, 0, 30000, (0, 0, 255), 5)
-    mars = CelestialObject(6.39e23, 2.279e11, 0, 0, 24000, (255, 0, 0), 4)
-    jupiter = CelestialObject(1.898e27, 7.786e11, 0, 0, 13000, (255, 69, 0), 15)
-    saturn = CelestialObject(5.683e26, 1.429e12, 0, 0, 10000, (255, 215, 0), 12)
-    uranus = CelestialObject(8.681e25, 2.871e12, 0, 0, 6800, (173, 216, 230), 8)
-    neptune = CelestialObject(1.024e26, 4.495e12, 0, 0, 5400, (0, 0, 128), 8)
-
-    # Liste des objets célestes
-    list_of_celestial_objects = [sun, mercury, venus, earth, mars, jupiter, saturn, uranus, neptune]
-
-    # Paramètres de la simulation
-    time_step = 100 * 86400  # en secondes (86 400 s = 1 j)
-
-    # Initialisation de Pygame
-    pygame.init()
-    width, height = 800, 600
-    screen = pygame.display.set_mode((width, height))
-    pygame.display.set_caption("Simulateur de Trajectoire Gravitationnelle")
-
-    clock = pygame.time.Clock()
-
-    # Position initiale de la souris
-    initial_mouse_x, initial_mouse_y = pygame.mouse.get_pos()
-    offset_x, offset_y = 0, 0
-    mouse_button_pressed = False
-
-    # Facteur d'échelle initial
-    current_scale_factor = SCALE_FACTOR_LINEAR
-
-    while True:
-
-        # Gestion des évènements
+    def handle_events(self):
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
                 sys.exit()
             elif event.type == pygame.MOUSEBUTTONDOWN:
-                if event.button == 1:  # Vérifier le clic gauche
-                    initial_mouse_x, initial_mouse_y = pygame.mouse.get_pos()
-                    mouse_button_pressed = True
-                elif event.button == 4:  # Molette vers le haut
-                    current_scale_factor *= 1.1  # Augmenter le facteur d'échelle
-                elif event.button == 5:  # Molette vers le bas
-                    current_scale_factor /= 1.1  # Diminuer le facteur d'échelle
+                if event.button == 1:
+                    self.handle_left_click()
+                elif event.button == 4:
+                    self.handle_scroll_up()
+                elif event.button == 5:
+                    self.handle_scroll_down()
             elif event.type == pygame.MOUSEBUTTONUP and event.button == 1:
-                mouse_button_pressed = False
+                self.handle_left_release()
 
-        # Mise à jour des positions et vitesses des objets
-        update_velocities(list_of_celestial_objects, time_step)
-        for obj in list_of_celestial_objects:
-            obj.update_position(time_step)
+    def handle_left_click(self):
+        self.initial_mouse_x, self.initial_mouse_y = pygame.mouse.get_pos()
+        self.mouse_button_pressed = True
 
-        # Mise à jour du déplacement en fonction du mouvement de la souris (si le bouton est enfoncé)
-        if mouse_button_pressed:
+    def handle_scroll_up(self):
+        self.current_scale_factor *= 1.1
+
+    def handle_scroll_down(self):
+        self.current_scale_factor /= 1.1
+
+    def handle_left_release(self):
+        self.mouse_button_pressed = False
+
+    def handle_mouse_drag(self):
+        if self.mouse_button_pressed:
             current_mouse_x, current_mouse_y = pygame.mouse.get_pos()
-            offset_x -= current_mouse_x - initial_mouse_x
-            offset_y -= current_mouse_y - initial_mouse_y
-            initial_mouse_x, initial_mouse_y = current_mouse_x, current_mouse_y
-        
-        # Affichage des objets
-        screen.fill((0, 0, 0))
-        for obj in list_of_celestial_objects:
-            pygame.draw.circle(screen, obj.color, translate_coordinates(obj, width, height, scale_factor=current_scale_factor, offset_x=offset_x, offset_y=offset_y), obj.radius)
+            self.offset_x -= current_mouse_x - self.initial_mouse_x
+            self.offset_y -= current_mouse_y - self.initial_mouse_y
+            self.initial_mouse_x, self.initial_mouse_y = current_mouse_x, current_mouse_y
 
-        pygame.display.flip()
-        clock.tick(30)  # Limiter la vitesse d'affichage
-    
+# Class to manage the simulation
+class Simulation:
+    def __init__(self, system, time_step):
+        self.system = GravitationalSystem(system)
+        self.time_step = time_step
+
+    def update_objects_positions(self):
+        for obj in self.system.objects:
+            obj.update_position(self.time_step)
+
+# Class to manage the main window
+class MainWindow:
+    def __init__(self, width, height, fps, window_name, system, time_step, scale_factor):
+        self.width = width
+        self.height = height
+        self.fps = fps
+        self.window_name = window_name
+        self.simulation = Simulation(system, time_step)
+        self.event_manager = EventManager(scale_factor)
+
+        pygame.init()
+        self.screen = pygame.display.set_mode((self.width, self.height))
+        pygame.display.set_caption(self.window_name)
+        self.clock = pygame.time.Clock()
+
+    def run(self):
+        while True:
+            self.event_manager.handle_events()
+
+            self.simulation.system.update_velocities(self.simulation.time_step)
+            self.simulation.update_objects_positions()
+            self.event_manager.handle_mouse_drag()
+
+            self.draw_objects()
+
+            pygame.display.flip()
+            self.clock.tick(self.fps)
+
+    def translate_coordinates(self, obj):
+        translated_x = obj.x // self.event_manager.current_scale_factor + self.width // 2 - self.event_manager.offset_x
+        translated_y = obj.y // self.event_manager.current_scale_factor + self.height // 2 - self.event_manager.offset_y
+        return translated_x, translated_y
+
+    def draw_objects(self):
+        self.screen.fill((0, 0, 0))
+        for obj in self.simulation.system.objects:
+            pygame.draw.circle(self.screen, obj.color, self.translate_coordinates(obj), obj.radius)
+
+
+def main():
+
+    # Window parameters
+    SIZE_WIDTH = 800
+    SIZE_HEIGHT = 600
+    FPS = 30
+    WINDOW_NAME = "Gravitational trajectory simulator"
+    SCALE_FACTOR = 100e8
+
+    # Simulation parameters
+    TIME_STEP = 100 * 86400
+    SYSTEM = [
+        CelestialObject(1.989e30, 0, 0, 0, 0, (255, 255, 0), 20),
+        CelestialObject(3.285e23, 5.791e10, 0, 0, 47000, (200, 200, 200), 3),
+        CelestialObject(4.867e24, 1.082e11, 0, 0, 35000, (255, 165, 0), 4),
+        CelestialObject(5.972e24, 1.496e11, 0, 0, 30000, (0, 0, 255), 5),
+        CelestialObject(6.39e23, 2.279e11, 0, 0, 24000, (255, 0, 0), 4),
+        CelestialObject(1.898e27, 7.786e11, 0, 0, 13000, (255, 69, 0), 15),
+        CelestialObject(5.683e26, 1.429e12, 0, 0, 10000, (255, 215, 0), 12),
+        CelestialObject(8.681e25, 2.871e12, 0, 0, 6800, (173, 216, 230), 8),
+        CelestialObject(1.024e26, 4.495e12, 0, 0, 5400, (0, 0, 128), 8)
+    ]
+
+    # Launch the window and simulation
+    main_window = MainWindow(SIZE_WIDTH, SIZE_HEIGHT, FPS, WINDOW_NAME, SYSTEM, TIME_STEP, SCALE_FACTOR)
+    main_window.run()
+
 if __name__ == "__main__":
-    run_simulation()
+    main()
