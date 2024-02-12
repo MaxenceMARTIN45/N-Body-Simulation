@@ -2,17 +2,27 @@
 import pygame
 import sys
 import math
+import random
 
 # Class to represent a celestial object
 class CelestialObject:
-    def __init__(self, mass, x, y, vx, vy, color, radius):
+    def __init__(self, mass, x, y, vx, vy, density, color):
         self.mass = mass
         self.x = x
         self.y = y
         self.vx = vx
         self.vy = vy
+        self.density = density
+        self.real_radius = self.calculate_real_radius()
         self.color = color
-        self.radius = radius
+        self.display_radius = self.calculate_display_radius()
+
+    def calculate_real_radius(self):
+        return ((3 * self.mass) / (4 * math.pi * self.density))**(1/3)
+
+    def calculate_display_radius(self):
+        # We simply apply a transformation that reduces the real radius to a reasonable display radius
+        return math.log(self.real_radius)**5//100000
 
     def update_position(self, time_step):
         self.x += self.vx * time_step
@@ -87,6 +97,16 @@ class EventManager:
             self.offset_y -= current_mouse_y - self.initial_mouse_y
             self.initial_mouse_x, self.initial_mouse_y = current_mouse_x, current_mouse_y
 
+# # Class to manage the simulation
+# class Simulation:
+#     def __init__(self, system, time_step):
+#         self.system = GravitationalSystem(system)
+#         self.time_step = time_step
+
+#     def update_objects_positions(self):
+#         for obj in self.system.objects:
+#             obj.update_position(self.time_step)
+
 # Class to manage the simulation
 class Simulation:
     def __init__(self, system, time_step):
@@ -94,8 +114,47 @@ class Simulation:
         self.time_step = time_step
 
     def update_objects_positions(self):
-        for obj in self.system.objects:
+        for i in range(len(self.system.objects)):
+            obj = self.system.objects[i]
             obj.update_position(self.time_step)
+
+            # Check for collisions with other objects
+            for j in range(len(self.system.objects)):
+                if i != j:
+                    other_obj = self.system.objects[j]
+                    distance = math.sqrt((obj.x - other_obj.x)**2 + (obj.y - other_obj.y)**2)
+                    min_distance = obj.real_radius + other_obj.real_radius
+
+                    if distance < min_distance:
+                        # Collision occurred, merge the two objects
+                        merged_obj = self.merge_objects(obj, other_obj)
+                        self.system.objects[i] = merged_obj
+                        self.system.objects.pop(j)
+                        break
+
+    def merge_objects(self, obj1, obj2):
+        # Calculate the new mass and velocity after merging
+        new_mass = obj1.mass + obj2.mass
+        new_velocity_x = (obj1.mass * obj1.vx + obj2.mass * obj2.vx) / new_mass
+        new_velocity_y = (obj1.mass * obj1.vy + obj2.mass * obj2.vy) / new_mass
+
+        # Choose the position of the more massive object
+        if obj1.mass >= obj2.mass:
+            new_x, new_y = obj1.x, obj1.y
+        else:
+            new_x, new_y = obj2.x, obj2.y
+
+        # Calculate the new density based on the merged mass and real radius
+        new_density = (obj1.density * obj1.real_radius**3 + obj2.density * obj2.real_radius**3) / (new_mass * (new_radius**3))
+
+        # Use the color of the more massive object
+        new_color = obj1.color if obj1.mass >= obj2.mass else obj2.color
+
+        # Create a new CelestialObject with the merged properties
+        merged_obj = CelestialObject(new_mass, new_x, new_y, new_velocity_x, new_velocity_y, new_density, new_color)
+
+        return merged_obj
+
 
 # Class to manage the main window
 class MainWindow:
@@ -133,7 +192,35 @@ class MainWindow:
     def draw_objects(self):
         self.screen.fill((0, 0, 0))
         for obj in self.simulation.system.objects:
-            pygame.draw.circle(self.screen, obj.color, self.translate_coordinates(obj), obj.radius)
+            pygame.draw.circle(self.screen, obj.color, self.translate_coordinates(obj), obj.display_radius)
+
+# Class to generate a system of N bodies randomly
+class SystemGenerator:
+    def __init__(self, num_bodies, zero_speed_initialization):
+        self.num_bodies = num_bodies
+        self.zero_speed_initialization = zero_speed_initialization
+
+    def generate_system(self):
+        system = []
+        min_mass, max_mass = 1e20, 1e30
+        min_position, max_position = -1e14, 1e14
+        min_density, max_density = 500,10000
+        if self.zero_speed_initialization:
+            min_velocity, max_velocity = 0, 0
+        else:
+            min_velocity, max_velocity = -1e3, 1e3
+
+        for _ in range(self.num_bodies):
+            mass = random.uniform(min_mass, max_mass)
+            x = random.uniform(min_position, max_position)
+            y = random.uniform(min_position, max_position)
+            vx = random.uniform(min_velocity, max_velocity)
+            vy = random.uniform(min_velocity, max_velocity)
+            density = random.uniform(min_density, max_density)
+            color = (random.randint(0, 255), random.randint(0, 255), random.randint(0, 255))
+
+            system.append(CelestialObject(mass, x, y, vx, vy, density, color))
+        return system
 
 
 def main():
@@ -143,21 +230,38 @@ def main():
     SIZE_HEIGHT = 600
     FPS = 30
     WINDOW_NAME = "Gravitational trajectory simulator"
-    SCALE_FACTOR = 100e8
-
+    
     # Simulation parameters
     TIME_STEP = 100 * 86400
-    SYSTEM = [
-        CelestialObject(1.989e30, 0, 0, 0, 0, (255, 255, 0), 20),
-        CelestialObject(3.285e23, 5.791e10, 0, 0, 47000, (200, 200, 200), 3),
-        CelestialObject(4.867e24, 1.082e11, 0, 0, 35000, (255, 165, 0), 4),
-        CelestialObject(5.972e24, 1.496e11, 0, 0, 30000, (0, 0, 255), 5),
-        CelestialObject(6.39e23, 2.279e11, 0, 0, 24000, (255, 0, 0), 4),
-        CelestialObject(1.898e27, 7.786e11, 0, 0, 13000, (255, 69, 0), 15),
-        CelestialObject(5.683e26, 1.429e12, 0, 0, 10000, (255, 215, 0), 12),
-        CelestialObject(8.681e25, 2.871e12, 0, 0, 6800, (173, 216, 230), 8),
-        CelestialObject(1.024e26, 4.495e12, 0, 0, 5400, (0, 0, 128), 8)
-    ]
+
+    # Choose either the solar system or a random system with n bodies
+    use_solar_system = False
+
+    # If use_solar_system = False
+    num_bodies = 100
+    zero_speed_initialization = True
+    if use_solar_system:
+        SCALE_FACTOR = 10e9
+    else:
+        SCALE_FACTOR = 10e11
+
+    if use_solar_system:
+        SYSTEM = [
+            CelestialObject(mass=1.989e30, x=0, y=0, vx=0, vy=0, density=1410, color="yellow"),  # Soleil
+            CelestialObject(mass=3.285e23, x=5.7e10, y=0, vx=0, vy=4.7e4, density=5427, color="gray"),  # Mercure
+            CelestialObject(mass=4.867e24, x=1.1e11, y=0, vx=0, vy=3.5e4, density=5243, color="orange"),  # Venus
+            CelestialObject(mass=5.972e24, x=1.5e11, y=0, vx=0, vy=2.98e4, density=5514, color="blue"),  # Terre
+            CelestialObject(mass=6.39e23, x=2.2e11, y=0, vx=0, vy=2.4e4, density=3933, color="red"),  # Mars
+            CelestialObject(mass=1.898e27, x=7.7e11, y=0, vx=0, vy=1.3e4, density=1326, color="orange"),  # Jupiter
+            CelestialObject(mass=5.683e26, x=1.4e12, y=0, vx=0, vy=9.7e3, density=687, color="gold"),  # Saturne
+            CelestialObject(mass=8.681e25, x=2.8e12, y=0, vx=0, vy=6.8e3, density=1271, color="lightblue"),  # Uranus
+            CelestialObject(mass=1.024e26, x=4.5e12, y=0, vx=0, vy=5.4e3, density=1638, color="blue"),  # Neptune
+            CelestialObject(mass=1.309e22, x=5.9e12, y=0, vx=0, vy=4.7e3, density=2095, color="brown"),  # Pluton
+        ]
+
+    else:
+        system_generator = SystemGenerator(num_bodies, zero_speed_initialization)
+        SYSTEM = system_generator.generate_system()
 
     # Launch the window and simulation
     main_window = MainWindow(SIZE_WIDTH, SIZE_HEIGHT, FPS, WINDOW_NAME, SYSTEM, TIME_STEP, SCALE_FACTOR)
